@@ -5,8 +5,31 @@ import os
 
 app = Flask(__name__)
 
+# Increase payload limit
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
+
 NVIDIA_API_KEY = os.environ.get('NVIDIA_API_KEY') or os.environ.get('NIM_API_KEY', 'your-nvidia-api-key-here')
 NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
+
+# Context trimming settings
+MAX_MESSAGES = 50  # Keep last 50 messages (adjust as needed)
+ALWAYS_KEEP_FIRST = True  # Always preserve system message
+
+def trim_messages(messages, max_messages=MAX_MESSAGES):
+    """
+    Trims message history to prevent payload from getting too large.
+    Keeps the first message (usually system/character card) and recent messages.
+    """
+    if len(messages) <= max_messages:
+        return messages
+    
+    # If first message is a system message, always keep it
+    if ALWAYS_KEEP_FIRST and len(messages) > 0 and messages[0].get('role') == 'system':
+        # Keep system message + last (max_messages - 1) messages
+        return [messages[0]] + messages[-(max_messages - 1):]
+    else:
+        # Just keep last max_messages
+        return messages[-max_messages:]
 
 @app.after_request
 def after_request(response):
@@ -31,9 +54,12 @@ def chat_completions():
         max_tokens = data.get('max_tokens', 1024)
         stream = data.get('stream', False)
         
+        # Trim messages to prevent payload too large errors
+        trimmed_messages = trim_messages(messages)
+        
         nim_payload = {
             'model': model,
-            'messages': messages,
+            'messages': trimmed_messages,  # Use trimmed messages
             'temperature': temperature,
             'max_tokens': max_tokens,
             'stream': False
