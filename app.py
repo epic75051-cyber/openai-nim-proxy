@@ -5,31 +5,43 @@ import os
 
 app = Flask(__name__)
 
-# Increase payload limit
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
-
 NVIDIA_API_KEY = os.environ.get('NVIDIA_API_KEY') or os.environ.get('NIM_API_KEY', 'your-nvidia-api-key-here')
 NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1'
 
-# Context trimming settings
-MAX_MESSAGES = 50  # Keep last 50 messages (adjust as needed)
-ALWAYS_KEEP_FIRST = True  # Always preserve system message
+# Very aggressive trimming for long RPs
+MAX_MESSAGES = 15  # Start with 15, adjust if needed
+MAX_CHARS_PER_MESSAGE = 2000  # Limit individual message length
+
+def trim_message_content(content, max_chars=MAX_CHARS_PER_MESSAGE):
+    """Trim individual message content if too long"""
+    if isinstance(content, str) and len(content) > max_chars:
+        return content[:max_chars] + "..."
+    return content
 
 def trim_messages(messages, max_messages=MAX_MESSAGES):
     """
-    Trims message history to prevent payload from getting too large.
-    Keeps the first message (usually system/character card) and recent messages.
+    Aggressively trims message history.
     """
-    if len(messages) <= max_messages:
-        return messages
+    if not messages:
+        return []
     
-    # If first message is a system message, always keep it
-    if ALWAYS_KEEP_FIRST and len(messages) > 0 and messages[0].get('role') == 'system':
-        # Keep system message + last (max_messages - 1) messages
-        return [messages[0]] + messages[-(max_messages - 1):]
+    # First, trim individual message lengths
+    trimmed_content = []
+    for msg in messages:
+        new_msg = msg.copy()
+        if 'content' in new_msg:
+            new_msg['content'] = trim_message_content(new_msg['content'])
+        trimmed_content.append(new_msg)
+    
+    # Then limit number of messages
+    if len(trimmed_content) <= max_messages:
+        return trimmed_content
+    
+    # Keep system message + recent messages
+    if trimmed_content[0].get('role') == 'system':
+        return [trimmed_content[0]] + trimmed_content[-(max_messages - 1):]
     else:
-        # Just keep last max_messages
-        return messages[-max_messages:]
+        return trimmed_content[-max_messages:]
 
 @app.after_request
 def after_request(response):
@@ -46,7 +58,14 @@ def chat_completions():
         return '', 204
     
     try:
-        data = request.get_json()
+        # Get raw data with size limit
+        raw_data = request.get_data(cache=False, as_text=True)
+        
+        # Parse JSON
+        try:
+            data = json.loads(raw_data)
+        except:
+            return jsonify({'error': 'Invalid JSON'}), 400
         
         messages = data.get('messages', [])
         model = data.get('model', 'meta/llama-3.1-8b-instruct')
@@ -54,12 +73,12 @@ def chat_completions():
         max_tokens = data.get('max_tokens', 1024)
         stream = data.get('stream', False)
         
-        # Trim messages to prevent payload too large errors
+        # Aggressive trimming
         trimmed_messages = trim_messages(messages)
         
         nim_payload = {
             'model': model,
-            'messages': trimmed_messages,  # Use trimmed messages
+            'messages': trimmed_messages,
             'temperature': temperature,
             'max_tokens': max_tokens,
             'stream': False
