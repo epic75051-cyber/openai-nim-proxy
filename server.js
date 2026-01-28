@@ -105,13 +105,14 @@ app.post('/v1/chat/completions', async (req, res) => {
     };
     
     // Make request to NVIDIA NIM API
-    const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
-      headers: {
-        'Authorization': `Bearer ${NIM_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      responseType: stream ? 'stream' : 'json'
-    });
+const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
+  headers: {
+    'Authorization': `Bearer ${NIM_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  timeout: 120000, // 2 minutes timeout (120 seconds)
+  responseType: stream ? 'stream' : 'json'
+});
     
     if (stream) {
       // Handle streaming response with reasoning
