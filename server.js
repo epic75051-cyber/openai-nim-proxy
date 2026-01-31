@@ -223,16 +223,18 @@ const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest
     }
     
   } catch (error) {
-    console.error('Proxy error:', error.message);
-    
-    res.status(error.response?.status || 500).json({
-      error: {
-        message: error.message || 'Internal server error',
-        type: 'invalid_request_error',
-        code: error.response?.status || 500
-      }
-    });
-  }
+  console.error('Proxy error:', error.message);
+  console.error('Full error details:', JSON.stringify(error.response?.data, null, 2)); // ADD THIS LINE
+  
+  res.status(error.response?.status || 500).json({
+    error: {
+      message: error.response?.data?.error?.message || error.message || 'Internal server error',
+      type: 'invalid_request_error',
+      code: error.response?.status || 500,
+      details: error.response?.data // ADD THIS LINE
+    }
+  });
+} 
 });
 
 // Catch-all for unsupported endpoints
