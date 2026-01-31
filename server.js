@@ -32,6 +32,7 @@ const MODEL_MAPPING = {
   'claude-3-sonnet': 'openai/gpt-oss-20b',
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking',
   'gpt-4o-terminus': 'deepseek-ai/deepseek-v3.1-terminus',
+  'glm-4.7': 'z-ai/glm4.7',  // Add this line for GLM
 };
 
 // Health check endpoint
